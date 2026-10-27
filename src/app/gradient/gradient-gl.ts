@@ -145,6 +145,9 @@ export class GradientGl {
     setFloat("uGlassEdge", glass.edge);
     setFloat("uSmearAmount", smear.amount);
     setFloat("uSmearTeeth", smear.teeth);
+    gl.uniform1fv(location("uCurve[0]"), params.curve.samples);
+    setFloat("uCurveOnGlass", params.curve.target === "glass" ? 1 : 0);
+    setFloat("uCurveOnSmear", params.curve.target === "smear" ? 1 : 0);
     setFloat("uChromatic", field.chromatic);
     setFloat("uGrain", field.grain);
     setFloat("uCoverage", field.coverage);
