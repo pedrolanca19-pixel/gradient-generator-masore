@@ -1,6 +1,12 @@
+import { createCurveEvaluator } from "@/toolcraft/runtime";
+
 export type GradientPattern = "bands" | "diagonal" | "radial";
 export type GradientBlend = "normal" | "screen" | "add";
 export type GradientFont = "sans" | "serif" | "mono" | "display";
+export type GradientCurveTarget = "glass" | "smear";
+
+/** Curve samples evaluated on the CPU and uploaded as one uniform array. */
+export const GRADIENT_CURVE_SAMPLES = 64;
 
 export type GradientLayerEffects = {
   blend: GradientBlend;
@@ -12,6 +18,7 @@ export type GradientLayerEffects = {
 
 export type GradientParams = {
   angle: number;
+  curve: { samples: number[]; target: GradientCurveTarget };
   background: string;
   backgroundVisible: boolean;
   colors: [string, string, string];
@@ -29,6 +36,7 @@ export type GradientParams = {
   smear: { amount: number; teeth: number };
   text: GradientLayerEffects & {
     content: string;
+    enabled: boolean;
     font: GradientFont;
     size: number;
     weight: "400" | "700";
@@ -62,11 +70,28 @@ function readLayer(values: Record<string, unknown>, prefix: string): GradientLay
   };
 }
 
+/** Samples the authored curve; a missing value falls back to the identity ramp. */
+function sampleGradientCurve(value: unknown): number[] {
+  const points = (value as { points?: { RGB?: { x: number; y: number }[] } } | null)?.points?.RGB;
+  const evaluator = createCurveEvaluator(
+    points && points.length >= 2 ? points : [{ x: 0, y: 0 }, { x: 1, y: 1 }],
+    "smooth",
+  );
+  return Array.from({ length: GRADIENT_CURVE_SAMPLES }, (_, index) =>
+    evaluator(index / (GRADIENT_CURVE_SAMPLES - 1)),
+  );
+}
+
 /** Pure value reader: every renderer and export path derives its parameters here. */
 export function readGradientParams(values: Record<string, unknown>): GradientParams {
   const background = hex(values["appearance.background"], "#05060A");
+  const textEnabled = values["text.enabled"] !== false;
   return {
     angle: num(values["field.angle"], 0),
+    curve: {
+      samples: sampleGradientCurve(values["distortion.curve"]),
+      target: choice(values["distortion.target"], ["glass", "smear"], "glass"),
+    },
     background,
     backgroundVisible: values["export.includeBackground"] !== false,
     colors: [
@@ -95,7 +120,8 @@ export function readGradientParams(values: Record<string, unknown>): GradientPar
     },
     text: {
       ...readLayer(values, "text"),
-      content: typeof values["text.content"] === "string" ? values["text.content"] : "",
+      content: textEnabled && typeof values["text.content"] === "string" ? values["text.content"] : "",
+      enabled: textEnabled,
       font: choice(values["text.font"], ["sans", "serif", "mono", "display"], "sans"),
       size: num(values["text.size"], 0.14),
       weight: choice(values["text.weight"], ["400", "700"], "700"),

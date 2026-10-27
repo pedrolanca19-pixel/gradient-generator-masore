@@ -9,6 +9,11 @@ import {
 import appDefaults from "./app-defaults.json" with { type: "json" };
 import { appIdentity } from "./app-identity";
 
+const whenTextOn = {
+  all: [{ equals: true, target: "text.enabled" }],
+  mode: "conditional",
+} as const;
+
 const layerEffectSections = (
   layer: "photo" | "logo" | "text",
   label: string,
@@ -314,6 +319,49 @@ export const appSchema = defineToolcraft({
           },
           {
             controls: {
+              distortionTarget: {
+                applicability: { mode: "always" },
+                defaultValue: "glass",
+                label: "Apply to",
+                options: [
+                  { label: "Glass", value: "glass" },
+                  { label: "Smear", value: "smear" },
+                ],
+                orderRole: "primary",
+                performanceReason: "Chooses which displacement the curve drives.",
+                performanceRole: "responsiveness",
+                target: "distortion.target",
+                type: "select",
+              },
+              distortionCurve: {
+                applicability: { mode: "always" },
+                defaultValue: {
+                  activeChannel: "RGB",
+                  points: {
+                    RGB: [
+                      { x: 0, y: 0.5 },
+                      { x: 0.25, y: 0.3125 },
+                      { x: 0.5, y: 0.5 },
+                      { x: 0.75, y: 0.6875 },
+                      { x: 1, y: 0.5 },
+                    ],
+                  },
+                },
+                label: "Curve",
+                orderRole: "spatial",
+                performanceReason: "The curve is sampled once per render into a 64-entry uniform.",
+                performanceRole: "responsiveness",
+                target: "distortion.curve",
+                type: "curves",
+                variant: "single",
+                curveIntent: "single-value-map",
+              },
+            },
+            id: "distortion",
+            title: "Distortion",
+          },
+          {
+            controls: {
               fieldChromatic: {
                 defaultValue: 0,
                 label: "Chromatic",
@@ -397,19 +445,30 @@ export const appSchema = defineToolcraft({
           },
           {
             controls: {
-              textContent: {
-                defaultValue: "Gradient",
+              textEnabled: {
+                applicability: { mode: "always" },
+                defaultValue: true,
                 label: "Text",
+                orderRole: "primary",
+                performanceReason: "Adds or removes the text layer raster from the composite.",
+                performanceRole: "responsiveness",
+                target: "text.enabled",
+                type: "switch",
+              },
+              textContent: {
+                applicability: whenTextOn,
+                defaultValue: "Gradient",
+                label: "Text content",
                 orderRole: "primary",
                 performanceReason: "Text is rasterized once per content or style change.",
                 performanceRole: "responsiveness",
-      applicability: { mode: "always" },
                 target: "text.content",
                 textValueKind: "single-line",
                 commitMode: "setting",
                 type: "text",
               },
               textSize: {
+                applicability: whenTextOn,
                 defaultValue: 0.14,
                 label: "Size",
                 max: 0.4,
@@ -417,12 +476,12 @@ export const appSchema = defineToolcraft({
                 orderRole: "spatial",
                 performanceReason: "Changes the text raster size in its layer canvas.",
                 performanceRole: "responsiveness",
-      applicability: { mode: "always" },
                 step: 0.005,
                 target: "text.size",
                 type: "slider",
               },
               textFont: {
+                applicability: whenTextOn,
                 defaultValue: "sans",
                 label: "Font",
                 options: [
@@ -434,11 +493,11 @@ export const appSchema = defineToolcraft({
                 orderRole: "primary",
                 performanceReason: "Chooses the canvas font family for the text raster.",
                 performanceRole: "responsiveness",
-      applicability: { mode: "always" },
                 target: "text.font",
                 type: "select",
               },
               textWeight: {
+                applicability: whenTextOn,
                 defaultValue: "700",
                 label: "Weight",
                 options: [
@@ -448,11 +507,15 @@ export const appSchema = defineToolcraft({
                 orderRole: "primary",
                 performanceReason: "Chooses the canvas font weight for the text raster.",
                 performanceRole: "responsiveness",
-      applicability: { mode: "always" },
                 target: "text.weight",
                 type: "select",
               },
-              ...layerEffectSections("text", "Text"),
+              ...Object.fromEntries(
+                Object.entries(layerEffectSections("text", "Text")).map(([id, control]) => [
+                  id,
+                  { ...control, applicability: whenTextOn },
+                ]),
+              ),
             },
             id: "text",
             title: "text",

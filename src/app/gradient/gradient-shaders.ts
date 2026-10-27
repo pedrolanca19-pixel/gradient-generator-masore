@@ -35,8 +35,19 @@ uniform float uSmearTeeth;
 uniform float uChromatic;
 uniform float uGrain;
 uniform float uCoverage;
+uniform float uCurve[64];
+uniform float uCurveOnGlass;
+uniform float uCurveOnSmear;
 
 const float TAU = 6.28318530718;
+
+/** Linear lookup into the 64 curve samples, which span x in 0..1. */
+float curveAt(float x) {
+  float f = clamp(x, 0.0, 1.0) * 63.0;
+  int i = int(floor(f));
+  int j = min(i + 1, 63);
+  return mix(uCurve[i], uCurve[j], fract(f));
+}
 
 vec3 ramp(float t) {
   float x = fract(t) * 3.0;
@@ -80,12 +91,15 @@ void main() {
   // Vertical glass stripes: each stripe bends the sampling coordinate in x.
   float cell = fract(uv.x * uGlassCount);
   float g = cell * 2.0 - 1.0;
-  float bend = g * (1.0 - g * g);
+  // The authored curve replaces the default bend when it targets the glass.
+  // Its mid-height is zero displacement, so the default curve matches the bend.
+  float bend = uCurveOnGlass > 0.5 ? (curveAt(cell) - 0.5) * 2.0 : g * (1.0 - g * g);
   uv.x += uGlassAmount * bend * 0.8 / uGlassCount;
 
-  // Serrated smear: sawtooth horizontal displacement per row.
+  // Serrated smear: sawtooth horizontal displacement per row, or the curve.
   float tooth = fract(uv.y * uSmearTeeth);
-  uv.x += uSmearAmount * (tooth - 0.5) * 0.25;
+  float toothShape = uCurveOnSmear > 0.5 ? curveAt(tooth) - 0.5 : tooth - 0.5;
+  uv.x += uSmearAmount * toothShape * 0.25;
 
   vec3 col;
   if (uChromatic > 0.0) {
